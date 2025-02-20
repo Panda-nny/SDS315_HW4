@@ -1,0 +1,147 @@
+---
+title: "HW4: https://github.com/Panda-nny/SDS315_HW4"
+author: "Danny Pan (dp36627)"
+date: "2025-02-17"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(mosaic)
+library(tokenizers)
+library(kableExtra)
+```
+
+## Problem 1 - Iron Bank
+
+```{r echo = FALSE, message = FALSE}
+set.seed(1)
+simFlag <- do(100000) * nflip(n = 2021, prob = .024)
+ggplot(simFlag) + geom_histogram(aes(x = nflip)) + labs(title = "Distribution of Simulated Flags of Iron Bank \nAccording to 2.4% Baseline (E(x) = 48.5)", x = "Simulated Flags") 
+#2021 * .024
+#2021 * .024 - (70 - 2021 * .024)
+#length(simFlag$nflip[simFlag$nflip >= 70]) / length(simFlag$nflip)
+#length(simFlag$nflip[simFlag$nflip >= 70 | simFlag$nflip <= 27]) / length(simFlag$nflip)
+```
+
+To test the null hypothesis that the SEC detection algorithm flags securities trades from the Iron Bank at the same 2.4% baseline, 100 thousand simulations of a similar number of 2021 trades were run. According to the baseline, around 48.5 flags are expected to occur on average. That being said, only 202 (0.202%) of these simulations resulted in 70 or more flagged trades, and only 58 simulations (0.058%) resulted in 27 or less flags, which details the other end since a two-tailed test was performed. This results in a p-value of .0026, which is pretty convincing evidence (beyond reasonable doubt) to suggest that the null hypothesis is inplausible.
+
+\pagebreak
+
+## Problem 2 - Health Inspections
+
+```{r echo = FALSE, message = FALSE}
+set.seed(1)
+
+simViolations <- do(100000) * nflip(n = 50, prob = .03)
+ggplot(simViolations) + geom_histogram(aes(x = nflip)) + labs(title = "Distribution of Simulated Violations \nAccording to 3% Average (E(x) = 1.5)", x = "Simulated Violations by Random Chance")
+#50 * .03
+#length(simViolations$nflip[simViolations$nflip >= 8]) / length(simFlag$nflip)
+```
+
+To test the null hypothesis that the observed data for Gourmet Bites is consistent with the Health Department’s 3% baseline, 100 thousand simulations of a similar number of 50 inspections were run. According to the baseline, around 1.5 are expected to occur on average. That being said, only 11 (0.011%) of these simulations resulted in 8 or more healthcode violations. This results in a p-value of .00011, which is pretty convincing evidence (beyond reasonable doubt) to suggest that the observed data does not align with the 3% baseline of health code violations due to random chance.
+
+\pagebreak
+
+## Problem 3 - Evaluating Jury Selection for Bias
+
+```{r echo = FALSE, message = FALSE}
+set.seed(1)
+juryDF <- tibble(observed = c(85,56,59,27,13), expected = 240 * c(.3, .25, .2, .15, .1))
+
+chi_squared_statistic = function(observed, expected) {
+  sum((observed - expected)^2 / expected)
+}
+
+chiSq <- chi_squared_statistic(juryDF$observed, juryDF$expected)
+
+#taken from class example by Dr Scott 
+chiSq_sim = do(10000)*{
+  simulated_counts = rmultinom(1, 240, juryDF$expected / 240)
+  this_chi2 = chi_squared_statistic(simulated_counts, juryDF$expected)
+  c(chiSq_Values = this_chi2) # return a vector with names and values
+}
+
+ggplot(chiSq_sim) + geom_histogram(aes(x=chiSq_Values))
+#length(chiSq_sim$chi2[chiSq_sim$chi2 >= chiSq]) / nrow(chiSq_sim)
+
+```
+
+**H0**: There is no significant difference between the distribution of jurors respective to their racial/ethnic group and the jurors selected by a certain judge.
+
+**T**: The chi-squared statistic comparing the observed counts of jurors in each group to the expected amount according to the demographic breakdown of the county’s eligible jury pool results in a value of chi\^2 = 12.426
+
+**P(T \| H0)**: According to 10,000 simulations of normal variance, only 131 simulated times did the simulated chi\^2 value equate to or exceed 12.426. This results in a p value of 0.0131.
+
+**Conclusion:** A p-value of 0.0131 suggests that there is likely some sort of bias (intentional or not) influencing the judge's jury selection. This may be explained by the fact that potentially, certain groups are more likely to removed "for cause" or due to non-racial peremptory challenges. Further investigation is needed to conclude if this is a possibility though. Additionally, if the state's juror pool does not reflect a similar demographic breakdown as the country's population, random selection of potential jurors are unlikely to reflect the same demographic proportions. To evaluate this, the state's public demographic statistics can be compared to the country's.
+
+\pagebreak
+
+## Problem 4 - LLM watermarking
+
+```{r echo = FALSE, message = FALSE}
+letter_frequencies <- read_csv("letter_frequencies.csv")
+myText <- readLines("brown_sentences.txt")
+
+# function mostly taken from Dr. Scott
+calculate_chi_squared = function(sentence) {
+  
+  freq_table <- letter_frequencies
+  # Ensure letter frequencies are normalized and sum to 1
+  freq_table$Probability = freq_table$Probability / sum(freq_table$Probability)
+  
+  # Remove non-letters and convert to uppercase
+  clean_sentence = gsub("[^A-Za-z]", "", sentence)
+  clean_sentence = toupper(clean_sentence)
+  
+  # Count the occurrences of each letter in the sentence
+  observed_counts = table(factor(strsplit(clean_sentence, "")[[1]], levels = freq_table$Letter))
+  
+  # Calculate expected counts
+  total_letters = sum(observed_counts)
+  expected_counts = total_letters * freq_table$Probability
+  
+  # Chi-squared statistic
+  chi_squared_stat = sum((observed_counts - expected_counts)^2 / expected_counts)
+  
+  return(chi_squared_stat)
+}
+
+sentences <- tokenize_sentences(paste(myText, collapse = " "))[[1]] #ai generated
+
+results <- unname(sapply(sentences, calculate_chi_squared))
+results_df <- tibble(ChiSquared = results)
+
+testSentences <- tibble(Sentence = c("She opened the book and started to read the first chapter, eagerly anticipating what might come next.",
+  "Despite the heavy rain, they decided to go for a long walk in the park, crossing the main avenue by the fountain in the center.",
+  "The museum’s new exhibit features ancient artifacts from various civilizations around the world.",
+  "He carefully examined the document, looking for any clues that might help solve the mystery.",
+  "The students gathered in the auditorium to listen to the guest speaker’s inspiring lecture.",
+  "Feeling vexed after an arduous and zany day at work, she hoped for a peaceful and quiet evening at home, cozying up after a quick dinner with some TV, or maybe a book on her upcoming visit to Auckland.",
+  "The chef demonstrated how to prepare a delicious meal using only locally sourced ingredients, focusing mainly on some excellent dinner recipes from Spain.",
+  "They watched the sunset from the hilltop, marveling at the beautiful array of colors in the sky.",
+  "The committee reviewed the proposal and provided many points of useful feedback to improve the project’s effectiveness.",
+  "Despite the challenges faced during the project, the team worked tirelessly to ensure its successful completion, resulting in a product that exceeded everyone’s expectations.")) #sentences AI generated
+
+ggplot(results_df) + geom_histogram(aes(x = ChiSquared)) + labs(title = "Distribution of Chi-Squared Values for Sentences from the Brown Corpus", x = "Chi-Squared Values")
+
+testSentences$chiSquared <- round(sapply(testSentences$Sentence, calculate_chi_squared),3)
+testSentences$pVal <- sapply(testSentences$chiSquared, function(x) {
+  round(length(results_df$ChiSquared[results_df$ChiSquared > x]) / nrow(results_df),3)
+})
+```
+
+The above histogram displays the distribution of Chi Squared values of the difference in expected letter frequencies for each sentence in the Brown Corpus. This was used as a baseline to evaluate the extremity of character frequencies in 10 sentences, one being watermarked and having irregular letter frequencies. The table below lists each sentence, their total Chi-Squared value, and the p-value of the Chi-Squared value relating to the distribution of irregularity of letters compared to the Brown Corpus. Compared to the null hypothesis that the sentences have a typical letter distribution, since the 6th sentence contains a unique low p-value of 0.011, we determine that the 6th sentence is likely the watermarked entry.
+
+\pagebreak
+
+```{r echo = FALSE, message = FALSE}
+#ai-generated for formatting
+kable(testSentences) %>%
+  kable_styling("striped", full_width = T) %>%
+  column_spec(1, width = "10cm") %>% 
+  column_spec(2, width = "1cm") %>% 
+  column_spec(3, width = "1cm")  
+```
